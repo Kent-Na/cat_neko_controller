@@ -46,6 +46,22 @@ sent from the controller.
 The controller will responds with "request result" and "request complete" 
 massage.
 
+[move request message]
+
+message_type = 0x11
+message_length = 4 byte
+
+message_contents =
+struct{
+    int8_t signal_0;
+    int8_t signal_1;
+    int8_t signal_2;
+    int8_t signal_3;
+};
+
+The controller will responds with "request result" and "request complete" 
+massage.
+
 [request result message]
 
 message_type = 0x20
