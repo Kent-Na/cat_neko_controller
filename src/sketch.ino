@@ -23,23 +23,25 @@ const uint8_t state_wait_compleate_request = 0x01;
 void receive_message();
 void receive_message_type();
 void receive_request_move_message();
+void receive_request_output();
 
 void send_request_result(int8_t result_code);
 void send_request_complete();
+void send_error_message(uint8_t error_code);
 
 /////////////////////
 //constants
 
 //Unit of time.
-const int dt_unit = 500;
+const int dt_unit = 100;
 const int serial_data_rate = 9600;
 
 //Pattern count must be 2^n where n is natural number.
 byte pattern[4] = {
-    B00001010,
-    B00000110,
-    B00000101,
     B00001001,
+    B00001100,
+    B00000110,
+    B00000011,
     //B00001000,
     //B00000010,
     //B00000100,
@@ -150,8 +152,10 @@ uint8_t message_type;
 
 const uint8_t null_message = 0x00;
 const uint8_t request_move_message = 0x10;
+const uint8_t request_output_message = 0x11;
 const uint8_t request_result_message = 0x20;
 const uint8_t request_complete_message = 0x21;
+const uint8_t error_message = 0x30;
 
 const int8_t result_fail = -1;
 const int8_t result_success = 0;
@@ -161,8 +165,14 @@ void receive_message(){
     if (message_type == null_message){
         receive_message_type();
     }
-    if (message_type == request_move_message){
+    else if (message_type == request_move_message){
         receive_request_move_message();
+    }
+    else if (message_type == request_output_message){
+        receive_request_output();
+    }
+    else{
+        send_error_message(1);
     }
 }
 void receive_message_type(){
@@ -198,6 +208,33 @@ void receive_request_move_message(){
     state = state_wait_compleate_request;
 }
 
+void receive_request_output(){
+    if (Serial.available()<4){
+        return;
+    }
+
+    int16_t s0  = Serial.read();
+    int16_t s1  = Serial.read();
+    int16_t s2  = Serial.read();
+    int16_t s3  = Serial.read();
+
+    send_request_result(result_success);
+
+    digitalWrite(4, s0 ? LOW : HIGH);
+    digitalWrite(5, s1 ? LOW : HIGH);
+    digitalWrite(6, s2 ? LOW : HIGH);
+    digitalWrite(7, s3 ? LOW : HIGH);
+
+    delay(500);
+
+    digitalWrite(4, LOW);
+    digitalWrite(5, LOW);
+    digitalWrite(6, LOW);
+    digitalWrite(7, LOW);
+
+    send_request_complete();
+}
+
 void send_request_result(int8_t result_code){
     Serial.write(request_result_message);
     Serial.write(result_code);
@@ -205,6 +242,11 @@ void send_request_result(int8_t result_code){
 
 void send_request_complete(){
     Serial.write(request_complete_message);
+}
+
+void send_error_message(uint8_t error_code){
+    Serial.write(error_message);
+    Serial.write(error_code);
 }
 
 void setup(){
@@ -219,7 +261,7 @@ void setup(){
     digitalWrite(6, LOW);
     digitalWrite(7, LOW);
 
-    //request_move(10, 10, 10, 40);
+    //request_move(100, 10, 10, 400);
     //state = state_wait_compleate_request;
 }
 
