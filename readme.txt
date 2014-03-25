@@ -3,6 +3,17 @@
 Stepping motor controller for 3D CNC by Kent-Na
 ////////////////////////////////////////////////
 
+
+////////////
+////Build & upload
+
+This program require "ino" to build and upload.
+
+--------
+ino build
+sudo ino upload
+--------
+
 ////////////
 ////Protocol
 
@@ -38,26 +49,11 @@ struct{
 };
 
 dx, dy and dz are step count of stepping motor on each axis.
-Movement speeds is determined by dt parameter witch specifies total duration.
-dt must be greater or equal to any of dx, dy or dz, or fail to execute 
-request. In this case request result message with result value -1 will be
-sent from the controller.
-
-The controller will responds with "request result" and "request complete" 
-massage.
-
-[move request message]
-
-message_type = 0x11
-message_length = 4 byte
-
-message_contents =
-struct{
-    int8_t signal_0;
-    int8_t signal_1;
-    int8_t signal_2;
-    int8_t signal_3;
-};
+Movement speeds is determined by dt parameter witch specifies 
+total duration.
+dt must be greater or equal to any absolute value of dx, dy or dz, 
+or fail to execute request. In this case request result message with 
+result value -1 will be sent from the controller.
 
 The controller will responds with "request result" and "request complete" 
 massage.
@@ -84,3 +80,15 @@ struct{
 
 This message will send from the controller when last request has been 
 completed and ready to accept next request.
+
+[bad message error message]
+
+message_type = 0x30
+message_length = 1 byte
+message_contents = 
+struct{
+    uint8_t received_byte;
+};
+
+This message will send from the controller when received unknown message 
+type.
