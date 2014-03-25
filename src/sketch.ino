@@ -1,6 +1,9 @@
 /////////////////////
 //Utility
 
+//Assert output on serial io is just bad idea. It messed up all protocol
+//state.
+
 /*
 #define assert(cond) if (!(cond)){\
     Serial.print("assert fail(");\
@@ -9,7 +12,32 @@
     }
     */
 
-    void assert(int cond){}
+#define assert(cond)
+
+/////////////////////
+//constants
+
+//You can customize those.
+
+//Unit of time.
+const int dt_unit = 10;
+const int serial_data_rate = 9600;
+
+//Pattern count must be 2^n where n is natural number.
+//Bellow 4 bit are used.
+byte pattern[4] = {
+    B00000001,
+    B00000100,
+    B00000010,
+    B00001000,
+};
+
+int pin_map[3][4] = {
+    {4,   5,  6,  7}, //x-axis
+    {8,   9, 10, 11}, //y-axis
+    {A0, A1, A2, A3}, //z-axis
+};
+
 
 /////////////////////
 //Master state
@@ -19,34 +47,15 @@ const uint8_t state_wait_next_message = 0x00;
 const uint8_t state_wait_compleate_request = 0x01;
 
 /////////////////////
-//
+//Message io prototypes
+
 void receive_message();
 void receive_message_type();
 void receive_request_move_message();
-void receive_request_output();
 
 void send_request_result(int8_t result_code);
 void send_request_complete();
 void send_error_message(uint8_t error_code);
-
-/////////////////////
-//constants
-
-//Unit of time.
-const int dt_unit = 100;
-const int serial_data_rate = 9600;
-
-//Pattern count must be 2^n where n is natural number.
-byte pattern[4] = {
-    B00001001,
-    B00001100,
-    B00000110,
-    B00000011,
-    //B00001000,
-    //B00000010,
-    //B00000100,
-    //B00000001,
-};
 
 //////////////////////////
 //Motor control
@@ -89,21 +98,24 @@ void init_axis(uint8_t axis){
 void set_axis_output(uint8_t axis){
     uint8_t phase = axis_state[axis].phase & B11;
     for (int i = 0; i<4; i++){
-        digitalWrite(i+4, (pattern[phase] & (1<<i)) ? LOW : HIGH);
+        digitalWrite(
+            pin_map[axis][i], 
+            (pattern[phase] & (1<<i)) ? HIGH : LOW);
     }
 }
 
 void update_all(){
     update_axis(0);
-    //update_axis(1);
-    //update_axis(2);
+    update_axis(1);
+    update_axis(2);
     remain_t --;
     if (remain_t == 0){
         send_request_complete();
-        digitalWrite(4, LOW);
-        digitalWrite(5, LOW);
-        digitalWrite(6, LOW);
-        digitalWrite(7, LOW);
+        for (int i= 0; i<3; i++){
+            for (int j= 0; j<3; j++){
+                digitalWrite(pin_map[j][i], LOW);
+            }
+        }
         state = state_wait_next_message;
     }
 }
@@ -152,7 +164,6 @@ uint8_t message_type;
 
 const uint8_t null_message = 0x00;
 const uint8_t request_move_message = 0x10;
-const uint8_t request_output_message = 0x11;
 const uint8_t request_result_message = 0x20;
 const uint8_t request_complete_message = 0x21;
 const uint8_t error_message = 0x30;
@@ -168,15 +179,11 @@ void receive_message(){
     else if (message_type == request_move_message){
         receive_request_move_message();
     }
-    else if (message_type == request_output_message){
-        receive_request_output();
-    }
     else{
-        send_error_message(1);
+        send_error_message(message_type);
     }
 }
 void receive_message_type(){
-    //receive message_type
     if (Serial.available()>0){
         message_type = Serial.read();
     }
@@ -196,7 +203,7 @@ void receive_request_move_message(){
     int16_t dt  = Serial.read()<<8;
             dt |= Serial.read();
 
-    if (dt < 1 || dx > dt || dy > dt || dz > dt){
+    if (dt < 1 || abs(dx) > dt || abs(dy) > dt || abs(dz) > dt){
         send_request_result(result_fail);
         message_type = null_message;
         return;
@@ -206,33 +213,6 @@ void receive_request_move_message(){
     message_type = null_message;
     request_move(dx, dy, dz, dt);
     state = state_wait_compleate_request;
-}
-
-void receive_request_output(){
-    if (Serial.available()<4){
-        return;
-    }
-
-    int16_t s0  = Serial.read();
-    int16_t s1  = Serial.read();
-    int16_t s2  = Serial.read();
-    int16_t s3  = Serial.read();
-
-    send_request_result(result_success);
-
-    digitalWrite(4, s0 ? LOW : HIGH);
-    digitalWrite(5, s1 ? LOW : HIGH);
-    digitalWrite(6, s2 ? LOW : HIGH);
-    digitalWrite(7, s3 ? LOW : HIGH);
-
-    delay(500);
-
-    digitalWrite(4, LOW);
-    digitalWrite(5, LOW);
-    digitalWrite(6, LOW);
-    digitalWrite(7, LOW);
-
-    send_request_complete();
 }
 
 void send_request_result(int8_t result_code){
@@ -252,17 +232,19 @@ void send_error_message(uint8_t error_code){
 void setup(){
     Serial.begin(serial_data_rate);
     state = state_wait_next_message;
-    pinMode(4, OUTPUT); 
-    pinMode(5, OUTPUT); 
-    pinMode(6, OUTPUT); 
-    pinMode(7, OUTPUT); 
-    digitalWrite(4, LOW);
-    digitalWrite(5, LOW);
-    digitalWrite(6, LOW);
-    digitalWrite(7, LOW);
+    message_type = null_message;
 
-    //request_move(100, 10, 10, 400);
-    //state = state_wait_compleate_request;
+    for (int i= 0; i<4; i++){
+        for (int j= 0; j<3; j++){
+            pinMode(pin_map[j][i], OUTPUT);
+        }
+    }
+
+    for (int i= 0; i<4; i++){
+        for (int j= 0; j<3; j++){
+            digitalWrite(pin_map[j][i], LOW);
+        }
+    }
 }
 
 void loop(){
